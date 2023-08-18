@@ -41,7 +41,6 @@ class GRES(nn.Module):
         test_topk_per_image: int,
         lang_backbone: nn.Module,
     ):
-
         super().__init__()
         self.backbone = backbone
         self.sem_seg_head = sem_seg_head
@@ -55,7 +54,9 @@ class GRES(nn.Module):
             size_divisibility = self.backbone.size_divisibility
         self.size_divisibility = size_divisibility
         self.sem_seg_postprocess_before_inference = sem_seg_postprocess_before_inference
-        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
+        self.register_buffer(
+            "pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False
+        )
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
         # additional args
@@ -83,7 +84,11 @@ class GRES(nn.Module):
         dice_weight = cfg.MODEL.MASK_FORMER.DICE_WEIGHT
         mask_weight = cfg.MODEL.MASK_FORMER.MASK_WEIGHT
 
-        weight_dict = {"loss_ce": class_weight, "loss_mask": mask_weight, "loss_dice": dice_weight}
+        weight_dict = {
+            "loss_ce": class_weight,
+            "loss_mask": mask_weight,
+            "loss_dice": dice_weight,
+        }
 
         losses = ["masks"]
 
@@ -121,18 +126,19 @@ class GRES(nn.Module):
         return self.pixel_mean.device
 
     def forward(self, batched_inputs):
-
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
 
-        lang_emb = [x['lang_tokens'].to(self.device) for x in batched_inputs]
+        lang_emb = [x["lang_tokens"].to(self.device) for x in batched_inputs]
         lang_emb = torch.cat(lang_emb, dim=0)
 
-        lang_mask = [x['lang_mask'].to(self.device) for x in batched_inputs]
+        lang_mask = [x["lang_mask"].to(self.device) for x in batched_inputs]
         lang_mask = torch.cat(lang_mask, dim=0)
 
-        lang_feat = self.text_encoder(lang_emb, attention_mask=lang_mask)[0] # B, Nl, 768
+        lang_feat = self.text_encoder(lang_emb, attention_mask=lang_mask)[
+            0
+        ]  # B, Nl, 768
 
         lang_feat = lang_feat.permute(0, 2, 1)  # (B, 768, N_l) to make Conv1d happy
         lang_mask = lang_mask.unsqueeze(dim=-1)  # (batch, N_l, 1)
@@ -170,7 +176,9 @@ class GRES(nn.Module):
                 mask_pred_results, nt_pred_results, batched_inputs, images.image_sizes
             ):
                 processed_results.append({})
-                r, nt = retry_if_cuda_oom(self.refer_inference)(mask_pred_result, nt_pred_result)
+                r, nt = retry_if_cuda_oom(self.refer_inference)(
+                    mask_pred_result, nt_pred_result
+                )
                 processed_results[-1]["ref_seg"] = r
                 processed_results[-1]["nt_label"] = nt
 
@@ -182,20 +190,33 @@ class GRES(nn.Module):
 
         for data_per_image in batched_inputs:
             # pad instances
-            targets_per_image = data_per_image['instances'].to(self.device)
+            targets_per_image = data_per_image["instances"].to(self.device)
             gt_masks = targets_per_image.gt_masks
-            padded_masks = torch.zeros((gt_masks.shape[0], h_pad, w_pad), dtype=gt_masks.dtype, device=gt_masks.device)
+            padded_masks = torch.zeros(
+                (gt_masks.shape[0], h_pad, w_pad),
+                dtype=gt_masks.dtype,
+                device=gt_masks.device,
+            )
             padded_masks[:, : gt_masks.shape[1], : gt_masks.shape[2]] = gt_masks
-            padded_masks = torch.zeros((gt_masks.shape[0], h_pad, w_pad), dtype=gt_masks.dtype, device=gt_masks.device)
-            is_empty = torch.tensor(data_per_image['empty'], dtype=targets_per_image.gt_classes.dtype
-, device=targets_per_image.gt_classes.device)
+            padded_masks = torch.zeros(
+                (gt_masks.shape[0], h_pad, w_pad),
+                dtype=gt_masks.dtype,
+                device=gt_masks.device,
+            )
+            is_empty = torch.tensor(
+                data_per_image["empty"],
+                dtype=targets_per_image.gt_classes.dtype,
+                device=targets_per_image.gt_classes.device,
+            )
             target_dict = {
-                    "labels": targets_per_image.gt_classes,
-                    "masks": padded_masks,
-                    "empty": is_empty,
-                }
+                "labels": targets_per_image.gt_classes,
+                "masks": padded_masks,
+                "empty": is_empty,
+            }
             if data_per_image["gt_mask_merged"] is not None:
-                target_dict["gt_mask_merged"] = data_per_image["gt_mask_merged"].to(self.device)
+                target_dict["gt_mask_merged"] = data_per_image["gt_mask_merged"].to(
+                    self.device
+                )
 
             new_targets.append(target_dict)
         return new_targets
