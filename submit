@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --output=logs/%A_%a.output
 #SBATCH --partition=gpu
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=32G
@@ -13,8 +13,9 @@ export RDZV_HOST=$(hostname)
 export RDZV_PORT=3681
 
 source /home/mingming.gong/.bashrc
-source activate /home/mingming.gong/miniconda3/envs/open_clip
+source activate
+conda list
 
-cd /home/mingming.gong/fast-clip
-# bash scripts/mask_75.sh
-bash $1
+cd /home/mingming.gong/ReLA-dev
+# bash $1
+$1
